@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+output/
+*.wav
+*.mp3
+*.pth
+*.index
+*.log
+.DS_Store
