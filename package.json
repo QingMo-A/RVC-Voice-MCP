@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "public": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-public.ps1",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-public.ps1",
     "check": "tsc --noEmit"
   },
   "dependencies": {

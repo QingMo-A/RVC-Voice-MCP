@@ -33,7 +33,23 @@ Edit `.env` before starting and replace `HTTP_TOKEN` with a long random secret.
 - Health: `http://127.0.0.1:8788/health`
 - MCP: `http://127.0.0.1:8788/mcp?token=YOUR_TOKEN`
 
-For ChatGPT web, expose port 8788 through a token-protected HTTPS tunnel, set `PUBLIC_BASE_URL` to that HTTPS origin, restart, enable Developer Mode, and register the HTTPS `/mcp` URL as a custom plugin/app.
+## One-click public endpoint
+
+Run:
+
+```powershell
+npm run public
+```
+
+The first run downloads Cloudflare Tunnel into the ignored local `tools` folder. The script generates a fresh access token, starts the MCP server and tunnel in the background, then prints the HTTPS connector URL to add in ChatGPT Developer Mode. Keep that terminal open only while reading the URL; the two background processes continue running.
+
+Stop both processes with:
+
+```powershell
+npm run stop
+```
+
+Quick tunnels are intended for development and their URL changes each time. For a stable public release, configure a named Cloudflare Tunnel and a domain you control.
 
 ## Tools
 
@@ -42,7 +58,7 @@ For ChatGPT web, expose port 8788 through a token-protected HTTPS tunnel, set `P
 
 ## Current scope
 
-The initial adapter uses Applio's built-in TTS command and RVC inference. Fully offline TTS and automatic tunnel setup are planned.
+The initial adapter uses Applio's built-in TTS command and RVC inference. Fully offline TTS and a stable named tunnel are future work.
 
 ## License
 
