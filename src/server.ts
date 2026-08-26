@@ -45,6 +45,12 @@ const INDEX_PATH = configuredIndexPath || (indexCandidates.length === 1 ? indexC
 const OUTPUT_DIR = envValue("OUTPUT_DIR") || path.join(ROOT_DIR, "output");
 const TTS_VOICE = process.env.TTS_VOICE ?? "zh-CN-YunxiNeural";
 const MAX_TEXT_LENGTH = Number(process.env.MAX_TEXT_LENGTH ?? "1200");
+const PLAYBACK_MODE = envValue("PLAYBACK_MODE") || "widget";
+const LOCAL_PLAYER_PATH = envValue("LOCAL_PLAYER_PATH");
+
+if (!new Set(["widget", "local", "both"]).has(PLAYBACK_MODE)) {
+  throw new Error("PLAYBACK_MODE must be widget, local, or both");
+}
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 const audioFiles = new Map<string, string>();
@@ -74,14 +80,26 @@ function runApplioTts(text: string, outputPath: string): Promise<void> {
   });
 }
 
-function queueSpeech(text: string): Promise<{ id: string; audioUrl: string }> {
+function playLocally(audioPath: string): void {
+  const ffplayPath = LOCAL_PLAYER_PATH || path.join(APPLIO_DIR, "ffplay.exe");
+  const child = existsSync(ffplayPath)
+    ? spawn(ffplayPath, ["-nodisp", "-autoexit", "-loglevel", "error", audioPath], { windowsHide: true, stdio: "ignore" })
+    : spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+      "[System.Media.SoundPlayer]::new($args[0]).PlaySync()", audioPath], { windowsHide: true, stdio: "ignore" });
+  child.on("error", (error) => console.error(`Local audio playback failed: ${error.message}`));
+  child.unref();
+}
+
+function queueSpeech(text: string): Promise<{ id: string; audioUrl: string; playedLocally: boolean }> {
   const task = async () => {
     const id = randomUUID();
     const outputPath = path.join(OUTPUT_DIR, `${id}.wav`);
     await runApplioTts(text, outputPath);
     audioFiles.set(id, outputPath);
+    const playedLocally = PLAYBACK_MODE === "local" || PLAYBACK_MODE === "both";
+    if (playedLocally) playLocally(outputPath);
     const token = HTTP_TOKEN ? `?token=${encodeURIComponent(HTTP_TOKEN)}` : "";
-    return { id, audioUrl: `${PUBLIC_BASE_URL}/audio/${id}.wav${token}` };
+    return { id, audioUrl: `${PUBLIC_BASE_URL}/audio/${id}.wav${token}`, playedLocally };
   };
   const result = generationQueue.then(task, task);
   generationQueue = result.catch(() => undefined);
@@ -100,15 +118,16 @@ function createAppServer(): McpServer {
     title: "Speak with an RVC voice",
     description: "Use this when the user asks to hear text spoken with the configured local RVC voice. The result is AI-generated audio.",
     inputSchema: { text: z.string().min(1).max(MAX_TEXT_LENGTH).describe("Text to synthesize and play.") },
-    outputSchema: { id: z.string(), text: z.string(), audioUrl: z.string(), voice: z.string(), aiGenerated: z.boolean() },
+    outputSchema: { id: z.string(), text: z.string(), audioUrl: z.string(), voice: z.string(), aiGenerated: z.boolean(), playedLocally: z.boolean() },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
     _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model", "app"] }, "openai/outputTemplate": WIDGET_URI,
       "openai/toolInvocation/invoking": "Generating RVC speech…", "openai/toolInvocation/invoked": "RVC speech is ready" },
   }, async ({ text }) => {
     const cleanText = text.trim();
-    const { id, audioUrl } = await queueSpeech(cleanText);
-    return { content: [{ type: "text" as const, text: "Generated an AI voice clip and opened the audio player." }],
-      structuredContent: { id, text: cleanText, audioUrl, voice: TTS_VOICE, aiGenerated: true } };
+    const { id, audioUrl, playedLocally } = await queueSpeech(cleanText);
+    const message = playedLocally ? "Generated an AI voice clip and started playback on the local computer." : "Generated an AI voice clip and opened the audio player.";
+    return { content: [{ type: "text" as const, text: message }],
+      structuredContent: { id, text: cleanText, audioUrl, voice: TTS_VOICE, aiGenerated: true, playedLocally } };
   });
 
   registerAppTool(server, "get_status", {
@@ -125,7 +144,7 @@ function createAppServer(): McpServer {
         model: configuredModelPath ? "manual" : "automatic",
         index: configuredIndexPath ? "manual" : "automatic",
         localModelCandidates: { pth: modelCandidates.length, index: indexCandidates.length },
-      }, voice: TTS_VOICE, maxTextLength: MAX_TEXT_LENGTH } };
+      }, playbackMode: PLAYBACK_MODE, localPlayer: LOCAL_PLAYER_PATH ? "configured" : "automatic", voice: TTS_VOICE, maxTextLength: MAX_TEXT_LENGTH } };
   });
   return server;
 }

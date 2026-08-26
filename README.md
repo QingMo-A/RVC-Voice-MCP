@@ -8,7 +8,7 @@ Turn text from an MCP-capable chat client into speech, convert it with a local R
 
 1. ChatGPT calls `speak_rvc` with text.
 2. The local server asks Applio to synthesize a base voice and run RVC conversion.
-3. The MCP Apps widget renders the generated WAV in an inline player.
+3. Depending on `PLAYBACK_MODE`, the local computer plays the WAV, the MCP Apps widget renders it, or both happen.
 
 The server never accepts model paths or shell commands from chat. Paths are fixed in local environment configuration and excluded from Git.
 
@@ -51,6 +51,24 @@ RVC_INDEX_PATH=D:\Voices\character.index
 ```
 
 Restart the service after adding or changing models because discovery happens at startup.
+
+## Playback modes
+
+Choose where generated speech plays:
+
+```env
+PLAYBACK_MODE=widget
+```
+
+- `widget` plays through the ChatGPT audio card.
+- `local` starts playback through the computer running this server.
+- `both` enables local playback and keeps the ChatGPT player available.
+
+On Windows, local playback works without another dependency. To use ffplay instead, set its full path:
+
+```env
+LOCAL_PLAYER_PATH=C:\ffmpeg\bin\ffplay.exe
+```
 
 - Health: `http://127.0.0.1:8788/health`
 - MCP: `http://127.0.0.1:8788/mcp?token=YOUR_TOKEN`
