@@ -4,6 +4,10 @@ dist/
 output/
 tools/
 .run/
+local/Applio/*
+local/models/*
+!local/Applio/README.md
+!local/models/README.md
 *.wav
 *.mp3
 *.pth

@@ -15,7 +15,7 @@ The server never accepts model paths or shell commands from chat. Paths are fixe
 ## Requirements
 
 - Windows and Node.js 20+
-- A working local Applio installation
+- A working Applio installation, either inside `local/Applio` or at a manually configured path
 - An RVC inference `.pth` and matching `.index`
 - ChatGPT Developer Mode and a public HTTPS tunnel for web integration
 
@@ -29,6 +29,28 @@ npm start
 ```
 
 Edit `.env` before starting and replace `HTTP_TOKEN` with a long random secret.
+
+## Local automatic discovery
+
+The repository reserves these ignored local directories:
+
+```text
+local/Applio/    Complete Applio installation
+local/models/    RVC .pth and .index files
+```
+
+If the four path settings in `.env` are left empty, the server uses `local/Applio/env/python.exe` and searches `local/models` recursively. Automatic model selection is enabled only when exactly one `.pth` and exactly one `.index` file are present, preventing an accidental mismatch when several voices are installed.
+
+Manual paths still take priority. You can set any or all of these values independently:
+
+```env
+APPLIO_DIR=D:\Apps\Applio
+PYTHON_PATH=D:\Apps\Applio\env\python.exe
+RVC_MODEL_PATH=D:\Voices\character.pth
+RVC_INDEX_PATH=D:\Voices\character.index
+```
+
+Restart the service after adding or changing models because discovery happens at startup.
 
 - Health: `http://127.0.0.1:8788/health`
 - MCP: `http://127.0.0.1:8788/mcp?token=YOUR_TOKEN`

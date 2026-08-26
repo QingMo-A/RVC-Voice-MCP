@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync, mkdirSync, createReadStream } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, createReadStream, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -16,11 +16,33 @@ const WIDGET_HTML = readFileSync(path.join(ROOT_DIR, "public", "widget.html"), "
 const PORT = Number(process.env.PORT ?? "8788");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? `http://127.0.0.1:${PORT}`).replace(/\/$/, "");
 const HTTP_TOKEN = process.env.HTTP_TOKEN?.trim() ?? "";
-const APPLIO_DIR = process.env.APPLIO_DIR ?? "Z:\\Applio";
-const PYTHON_PATH = process.env.PYTHON_PATH ?? path.join(APPLIO_DIR, "env", "python.exe");
-const MODEL_PATH = process.env.RVC_MODEL_PATH ?? "";
-const INDEX_PATH = process.env.RVC_INDEX_PATH ?? "";
-const OUTPUT_DIR = process.env.OUTPUT_DIR ?? path.join(ROOT_DIR, "output");
+const LOCAL_DIR = path.join(ROOT_DIR, "local");
+const LOCAL_APPLIO_DIR = path.join(LOCAL_DIR, "Applio");
+const LOCAL_MODELS_DIR = path.join(LOCAL_DIR, "models");
+
+function envValue(name: string): string {
+  return process.env[name]?.trim() ?? "";
+}
+
+function findFiles(directory: string, extension: string): string[] {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(extension))
+    .map((entry) => path.join(entry.parentPath, entry.name))
+    .sort();
+}
+
+const modelCandidates = findFiles(LOCAL_MODELS_DIR, ".pth");
+const indexCandidates = findFiles(LOCAL_MODELS_DIR, ".index");
+const configuredApplioDir = envValue("APPLIO_DIR");
+const configuredPythonPath = envValue("PYTHON_PATH");
+const configuredModelPath = envValue("RVC_MODEL_PATH");
+const configuredIndexPath = envValue("RVC_INDEX_PATH");
+const APPLIO_DIR = configuredApplioDir || LOCAL_APPLIO_DIR;
+const PYTHON_PATH = configuredPythonPath || path.join(APPLIO_DIR, "env", "python.exe");
+const MODEL_PATH = configuredModelPath || (modelCandidates.length === 1 ? modelCandidates[0] : "");
+const INDEX_PATH = configuredIndexPath || (indexCandidates.length === 1 ? indexCandidates[0] : "");
+const OUTPUT_DIR = envValue("OUTPUT_DIR") || path.join(ROOT_DIR, "output");
 const TTS_VOICE = process.env.TTS_VOICE ?? "zh-CN-YunxiNeural";
 const MAX_TEXT_LENGTH = Number(process.env.MAX_TEXT_LENGTH ?? "1200");
 
@@ -97,7 +119,12 @@ function createAppServer(): McpServer {
     const checks = { python: existsSync(PYTHON_PATH), model: existsSync(MODEL_PATH), index: existsSync(INDEX_PATH) };
     const ready = Object.values(checks).every(Boolean);
     return { content: [{ type: "text" as const, text: ready ? "RVC voice service is ready." : "RVC voice service needs configuration." }],
-      structuredContent: { ready, checks, voice: TTS_VOICE, maxTextLength: MAX_TEXT_LENGTH } };
+      structuredContent: { ready, checks, configuration: {
+        applio: configuredApplioDir || configuredPythonPath ? "manual" : "automatic",
+        model: configuredModelPath ? "manual" : "automatic",
+        index: configuredIndexPath ? "manual" : "automatic",
+        localModelCandidates: { pth: modelCandidates.length, index: indexCandidates.length },
+      }, voice: TTS_VOICE, maxTextLength: MAX_TEXT_LENGTH } };
   });
   return server;
 }
