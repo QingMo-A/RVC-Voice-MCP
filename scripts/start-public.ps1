@@ -35,7 +35,8 @@ $envText = [regex]::Replace($envText, '(?m)^PUBLIC_BASE_URL=.*$', 'PUBLIC_BASE_U
 Set-Content -LiteralPath $envPath -Value $envText -Encoding utf8
 
 Remove-Item -LiteralPath $tunnelLog, $serverLog -Force -ErrorAction SilentlyContinue
-$tunnel = Start-Process -FilePath $cloudflaredPath -ArgumentList @("tunnel", "--url", "http://127.0.0.1:8788", "--no-autoupdate", "--logfile", $tunnelLog) -WindowStyle Hidden -PassThru
+Write-Host "Starting Cloudflare Tunnel over HTTP/2..."
+$tunnel = Start-Process -FilePath $cloudflaredPath -ArgumentList @("tunnel", "--url", "http://127.0.0.1:8788", "--protocol", "http2", "--no-autoupdate", "--logfile", $tunnelLog) -WindowStyle Hidden -PassThru
 Set-Content -LiteralPath (Join-Path $runDir "tunnel.pid") -Value $tunnel.Id
 
 $publicBaseUrl = $null
@@ -56,6 +57,9 @@ if (-not $publicBaseUrl) {
     Remove-Item -LiteralPath (Join-Path $runDir "tunnel.pid") -Force -ErrorAction SilentlyContinue
     throw "Cloudflare Tunnel did not return a public URL. See $tunnelLog"
 }
+
+Write-Host "Temporary tunnel allocated: $publicBaseUrl"
+Write-Host "Starting the local MCP server..."
 
 $envText = Get-Content -LiteralPath $envPath -Raw
 $envText = [regex]::Replace($envText, '(?m)^PUBLIC_BASE_URL=.*$', "PUBLIC_BASE_URL=$publicBaseUrl")
@@ -79,26 +83,10 @@ if (-not $health.ok) {
     throw "The MCP server did not become healthy. See $serverLog"
 }
 
-$publicReady = $false
-for ($attempt = 0; $attempt -lt 240; $attempt++) {
-    Start-Sleep -Milliseconds 500
-    try {
-        $publicHealth = Invoke-RestMethod -Uri "$publicBaseUrl/health" -TimeoutSec 3
-        if ($publicHealth.ok) {
-            $publicReady = $true
-            break
-        }
-    } catch {}
-}
-
-if (-not $publicReady) {
-    & (Join-Path $PSScriptRoot "stop-public.ps1")
-    throw "The public tunnel did not become reachable. See $tunnelLog"
-}
-
 Write-Host ""
-Write-Host "RVC Voice MCP is online." -ForegroundColor Green
+Write-Host "RVC Voice MCP is running." -ForegroundColor Green
 Write-Host "ChatGPT connector URL:" -ForegroundColor Cyan
 Write-Host "$publicBaseUrl/mcp?token=$token"
 Write-Host ""
+Write-Host "Cloudflare may need 1-2 minutes before a new quick-tunnel address opens." -ForegroundColor Yellow
 Write-Host "Run 'npm run stop' when finished."
