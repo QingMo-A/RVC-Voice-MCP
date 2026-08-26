@@ -84,8 +84,8 @@ function playLocally(audioPath: string): void {
   const ffplayPath = LOCAL_PLAYER_PATH || path.join(APPLIO_DIR, "ffplay.exe");
   const child = existsSync(ffplayPath)
     ? spawn(ffplayPath, ["-nodisp", "-autoexit", "-loglevel", "error", audioPath], { windowsHide: true, stdio: "ignore" })
-    : spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
-      "[System.Media.SoundPlayer]::new($args[0]).PlaySync()", audioPath], { windowsHide: true, stdio: "ignore" });
+    : spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+      path.join(ROOT_DIR, "scripts", "play-wav.ps1"), audioPath], { windowsHide: true, stdio: "ignore" });
   child.on("error", (error) => console.error(`Local audio playback failed: ${error.message}`));
   child.unref();
 }
@@ -114,14 +114,19 @@ function createAppServer(): McpServer {
       "openai/widgetDescription": "An audio player for locally generated RVC speech, clearly labeled as AI-generated." },
   }] }));
 
+  const playbackMeta = PLAYBACK_MODE === "local" ? {
+    "openai/toolInvocation/invoking": "Generating RVC speech…", "openai/toolInvocation/invoked": "RVC speech is ready",
+  } : {
+    ui: { resourceUri: WIDGET_URI, visibility: ["model", "app"] }, "openai/outputTemplate": WIDGET_URI,
+    "openai/toolInvocation/invoking": "Generating RVC speech…", "openai/toolInvocation/invoked": "RVC speech is ready",
+  };
   registerAppTool(server, "speak_rvc", {
     title: "Speak with an RVC voice",
     description: "Use this when the user asks to hear text spoken with the configured local RVC voice. The result is AI-generated audio.",
     inputSchema: { text: z.string().min(1).max(MAX_TEXT_LENGTH).describe("Text to synthesize and play.") },
     outputSchema: { id: z.string(), text: z.string(), audioUrl: z.string(), voice: z.string(), aiGenerated: z.boolean(), playedLocally: z.boolean() },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
-    _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model", "app"] }, "openai/outputTemplate": WIDGET_URI,
-      "openai/toolInvocation/invoking": "Generating RVC speech…", "openai/toolInvocation/invoked": "RVC speech is ready" },
+    _meta: playbackMeta,
   }, async ({ text }) => {
     const cleanText = text.trim();
     const { id, audioUrl, playedLocally } = await queueSpeech(cleanText);
