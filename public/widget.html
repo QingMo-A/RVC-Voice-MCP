@@ -1,4 +1,25 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>RVC Voice Player</title><style>:root{color-scheme:light dark;font-family:Inter,"Microsoft YaHei",system-ui,sans-serif}body{margin:0;padding:14px;background:transparent}main{padding:16px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-radius:16px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}h2{margin:0;font-size:18px}.badge{font-size:11px;padding:4px 8px;border-radius:999px;background:#7c3aed;color:#fff}p{margin:10px 0;line-height:1.55;opacity:.82;white-space:pre-wrap}audio{width:100%;margin-top:8px}.status{font-size:12px;opacity:.62;margin-top:8px}</style></head>
 <body><main><div class="top"><h2>RVC Voice</h2><span class="badge">AI 合成音频</span></div><p id="text">正在等待音频…</p><audio id="player" controls preload="metadata"></audio><div id="status" class="status">连接 ChatGPT 播放器</div></main>
-<script type="module">const text=document.querySelector("#text"),player=document.querySelector("#player"),status=document.querySelector("#status");let rpcId=0;const pending=new Map();function apply(data){if(!data)return;text.textContent=data.text||"音频已生成";if(data.audioUrl){player.src=data.audioUrl;status.textContent="音频已就绪"}}window.addEventListener("message",event=>{if(event.source!==window.parent||event.data?.jsonrpc!=="2.0")return;const msg=event.data;if(typeof msg.id==="number"){const req=pending.get(msg.id);if(!req)return;pending.delete(msg.id);msg.error?req.reject(msg.error):req.resolve(msg.result);return}if(msg.method==="ui/notifications/tool-result")apply(msg.params?.structuredContent)});function request(method,params){return new Promise((resolve,reject)=>{const id=++rpcId;pending.set(id,{resolve,reject});window.parent.postMessage({jsonrpc:"2.0",id,method,params},"*")})}request("ui/initialize",{appInfo:{name:"rvc-voice-player",version:"0.1.0"},appCapabilities:{},protocolVersion:"2026-01-26"}).then(()=>window.parent.postMessage({jsonrpc:"2.0",method:"ui/notifications/initialized",params:{}},"*")).catch(()=>status.textContent="播放器初始化失败");apply(window.openai?.toolOutput);</script></body></html>
+<script type="module">
+const text=document.querySelector("#text"),player=document.querySelector("#player"),status=document.querySelector("#status");
+function apply(data){
+  if(!data||typeof data!=="object")return;
+  text.textContent=typeof data.text==="string"?data.text:"音频已生成";
+  if(typeof data.audioUrl==="string"&&data.audioUrl){
+    player.src=data.audioUrl;
+    player.load();
+    status.textContent="音频已就绪，点击播放";
+  }
+}
+window.addEventListener("message",event=>{
+  if(event.source!==window.parent)return;
+  const message=event.data;
+  if(!message||message.jsonrpc!=="2.0"||message.method!=="ui/notifications/tool-result")return;
+  apply(message.params?.structuredContent);
+},{passive:true});
+window.addEventListener("openai:set_globals",event=>apply(event.detail?.globals?.toolOutput),{passive:true});
+player.addEventListener("canplay",()=>status.textContent="音频已就绪，点击播放");
+player.addEventListener("error",()=>status.textContent="音频加载失败，请确认 MCP 服务和公网隧道仍在运行");
+apply(window.openai?.toolOutput);
+</script></body></html>

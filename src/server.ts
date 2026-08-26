@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const WIDGET_URI = "ui://rvc-voice/player-v1.html";
+const WIDGET_URI = "ui://rvc-voice/player-v2.html";
 const WIDGET_HTML = readFileSync(path.join(ROOT_DIR, "public", "widget.html"), "utf8");
 const PORT = Number(process.env.PORT ?? "8788");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? `http://127.0.0.1:${PORT}`).replace(/\/$/, "");
@@ -100,8 +100,9 @@ function createAppServer(): McpServer {
     title: "Speak with an RVC voice",
     description: "Use this when the user asks to hear text spoken with the configured local RVC voice. The result is AI-generated audio.",
     inputSchema: { text: z.string().min(1).max(MAX_TEXT_LENGTH).describe("Text to synthesize and play.") },
+    outputSchema: { id: z.string(), text: z.string(), audioUrl: z.string(), voice: z.string(), aiGenerated: z.boolean() },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true, idempotentHint: false },
-    _meta: { ui: { resourceUri: WIDGET_URI }, "openai/outputTemplate": WIDGET_URI,
+    _meta: { ui: { resourceUri: WIDGET_URI, visibility: ["model", "app"] }, "openai/outputTemplate": WIDGET_URI,
       "openai/toolInvocation/invoking": "Generating RVC speech…", "openai/toolInvocation/invoked": "RVC speech is ready" },
   }, async ({ text }) => {
     const cleanText = text.trim();

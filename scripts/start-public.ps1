@@ -80,7 +80,7 @@ if (-not $health.ok) {
 }
 
 $publicReady = $false
-for ($attempt = 0; $attempt -lt 60; $attempt++) {
+for ($attempt = 0; $attempt -lt 240; $attempt++) {
     Start-Sleep -Milliseconds 500
     try {
         $publicHealth = Invoke-RestMethod -Uri "$publicBaseUrl/health" -TimeoutSec 3
